@@ -49,7 +49,8 @@ module Botclean
           @board = board
           @robot = Position.new([posx,posy])
 
-          initial_state = State.new posx, posy, sizx, sizy, board
+          initial_state_data = "#{posx} #{posy}\n#{board.join("\n")}".to_sym
+          initial_state = State.new initial_state_data
 
           StateSpaceGraph.find_best_path initial_state
         end
@@ -59,9 +60,7 @@ module Botclean
           @board = board
           @robot = Position.new([posx,posy])
 
-          state = State.new posx, posy, sizx, sizy, board
           #Lets decide on a path
-          path = Path.new [state],[]
 
           # Look at all this dirt under my feet!
           if (board[posy][posx] == "d")
@@ -92,32 +91,62 @@ module Botclean
     end
 
     class State
-      attr_accessor :board,:robot_pos
-      def initialize px,py,sizx,sizy,board
-        @robot_pos = Position.new [px,py]
-        @max_rows = sizy
-        @max_cols = sizx
-        @board = board
+      attr_accessor :data
+      def initialize init_data
+        @data = init_data.to_sym
+      end
+
+      def set_size x,y
+        @sizx = x
+        @sizy = y
+      end
+
+      def deep_clone
+        State.new @data
       end
 
       def == state
-        state.robot_pos == @robot_pos and state.board == @board
+        state.data == @data
+      end
+
+      def robot_pos
+        @robot_pos || 
+          begin
+            @robot_pos = Position.new @data.to_s.lines.first.strip.split.map!{|i| i.to_i}
+          end
+      end
+
+      def robot_pos= position
+        @robot_pos = position
+        @data = "#{position.c} #{position.r}\n#{board.join("\n")}".to_sym
+      end
+      
+      def board
+        @board ||
+          begin
+            lines = @data.to_s.lines
+            lines.delete_at 0
+            lines.map! {|l| l.strip}
+            @board = lines
+          end
+      end
+
+      def board= new_board
+        @board = new_board
+        @data = "#{position.c} #{position.r}\n#{new_board.join("\n")}".to_sym
       end
 
       def final?
-        @board.each do |line|
-          return false if line.index("d")
-        end
-        return true
+        !@data.to_s.index("d")
       end
 
       def allowed_actions
         actions = []
-        actions << "CLEAN" if @board[@robot_pos.r][@robot_pos.c] == "d"
-        actions << "LEFT" if @robot_pos.c > 0
-        actions << "RIGHT" if @robot_pos.c < 4
-        actions << "UP" if @robot_pos.r > 0
-        actions << "DOWN" if @robot_pos.r < 4
+        actions << "CLEAN" if board[robot_pos.r][robot_pos.c] == "d"
+        actions << "LEFT" if robot_pos.c > 0
+        actions << "RIGHT" if robot_pos.c < 4
+        actions << "UP" if robot_pos.r > 0
+        actions << "DOWN" if robot_pos.r < 4
         actions.reject { |action|
           test_state = self.deep_clone
           test_state.take_action action
@@ -128,34 +157,42 @@ module Botclean
 
       def take_action action
         #return unless allowed_actions.index(action)
-
+        board
+        robot_pos
         if action == "CLEAN"
-          @board[@robot_pos.r][@robot_pos.c] = "b"
+          @board[robot_pos.r][robot_pos.c] = "b"
+          update_data
           return
         end
+        #binding.pry
         # The square its leaving behind
-        @board[@robot_pos.r][@robot_pos.c] = @board[@robot_pos.r][@robot_pos.c] == "d" ? "d" : "-"
+        @board[robot_pos.r][robot_pos.c] = board[robot_pos.r][robot_pos.c] == "d" ? "d" : "-"
         if action == "LEFT"
           # The square its entering
-          @board[@robot_pos.r][@robot_pos.c - 1] = @board[@robot_pos.r][@robot_pos.c - 1] == "d" ? "d" : "b"
+          @board[robot_pos.r][robot_pos.c - 1] = board[robot_pos.r][robot_pos.c - 1] == "d" ? "d" : "b"
           # The updated position
           @robot_pos.c -= 1
         elsif action == "RIGHT"
           # The square its entering
-          @board[@robot_pos.r][@robot_pos.c + 1] = @board[@robot_pos.r][@robot_pos.c + 1] == "d" ? "d" : "b"
+          @board[robot_pos.r][robot_pos.c + 1] = board[robot_pos.r][robot_pos.c + 1] == "d" ? "d" : "b"
           # The updated position
           @robot_pos.c += 1
         elsif action == "UP"
           # The square its entering
-          @board[@robot_pos.r - 1][@robot_pos.c] = @board[@robot_pos.r - 1][@robot_pos.c] == "d" ? "d" : "b"
+          @board[robot_pos.r - 1][robot_pos.c] = board[robot_pos.r - 1][robot_pos.c] == "d" ? "d" : "b"
           # The updated position
           @robot_pos.r -= 1
         elsif action == "DOWN"
           # The square its entering
-          @board[@robot_pos.r + 1][@robot_pos.c] = @board[@robot_pos.r + 1][@robot_pos.c] == "d" ? "d" : "b"
+          @board[robot_pos.r + 1][robot_pos.c] = board[robot_pos.r + 1][robot_pos.c] == "d" ? "d" : "b"
           # The updated position
           @robot_pos.r += 1
         end
+        update_data
+      end
+      
+      def update_data
+        @data = "#{robot_pos.c} #{robot_pos.r}\n#{board.join("\n")}".to_sym
       end
     end
 
@@ -165,7 +202,7 @@ module Botclean
         @states = states
         @steps = steps
       end
-      
+
       def << step
         @states << @states.last.deep_clone
         @states.last.take_action step
@@ -204,6 +241,7 @@ module Botclean
             end
           end
           @paths = new_paths
+          #binding.pry
           optimize_paths
           iterate_paths
         end
@@ -215,12 +253,13 @@ module Botclean
           last_states.each.with_index do |test_state,state_index|
             @paths.each.with_index do |path,path_index|
               if state_index != path_index and path.include? test_state and path.steps.count <= @paths[state_index].steps.count
+                #binding.pry
                 paths_to_delete << state_index
                 paths_to_keep << path_index
               end
             end
           end
-                binding.pry
+          #binding.pry
           paths_to_delete.uniq!
           @paths = @paths.reject.with_index {|path,i| paths_to_delete.include? i }
           #paths_to_delete.each do |i|
