@@ -197,23 +197,26 @@ module Botclean
     end
 
     class Path
-      attr_accessor :states, :steps
-      def initialize states,steps
+      attr_accessor :states
+      def initialize states
         @states = states
-        @steps = steps
+      end
+
+      def steps
+        @states.values
       end
 
       def << step
-        @states << @states.last.deep_clone
-        @states.last.take_action step
-        @steps << step
+        last_state_data = @states.keys.last
+        new_state = State.new(last_state_data)
+        new_state.take_action step
+        raise ArgumentError if @states.has_key? new_state.data # Should eliminate returns and loops
+        @states[last_state_data] = step
+        @states[new_state.data] = nil
       end
 
       def include? test_state
-        @states.each do |state|
-          return true if state == test_state
-        end
-        return false
+        @states.has_key? test_state.data
       end
     end
 
@@ -228,16 +231,20 @@ module Botclean
 
         def iterate_paths
           if @paths.empty?
-            @paths << Path.new([@initial_state], [])
+            @paths << Path.new({@initial_state.data => nil})
           end
 
           new_paths = []
           @paths.each do |path|
-            return path if path.states.last.final?
-            last_state = path.states.last
-            path.states.last.allowed_actions.each do |action|
+            last_state = State.new(path.states.keys.last)
+            return path if last_state.final?
+            last_state.allowed_actions.each do |action|
               new_paths << path.deep_clone
-              new_paths.last << action
+              begin
+                new_paths.last << action
+              rescue ArgumentError
+                new_paths.pop
+              end
             end
           end
           @paths = new_paths
@@ -247,7 +254,7 @@ module Botclean
         end
 
         def optimize_paths
-          last_states = @paths.map {|path| path.states.last}
+          last_states = @paths.map {|path| State.new path.states.keys.last}
           paths_to_delete = []
           paths_to_keep = []
           last_states.each.with_index do |test_state,state_index|
