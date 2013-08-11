@@ -147,11 +147,11 @@ module Botclean
         actions << "RIGHT" if robot_pos.c < 4
         actions << "UP" if robot_pos.r > 0
         actions << "DOWN" if robot_pos.r < 4
-        actions.reject { |action|
-          test_state = self.deep_clone
-          test_state.take_action action
-          !StateSpaceGraph.uniq? test_state
-        }
+        #actions.select { |action|
+        #  test_state = self.deep_clone
+        #  test_state.take_action action
+        #  StateSpaceGraph.uniq? test_state
+        #}
         actions
       end
 
@@ -203,7 +203,7 @@ module Botclean
       end
 
       def steps
-        @states.values
+        @states.values[0...-1]
       end
 
       def << step
@@ -235,21 +235,26 @@ module Botclean
           end
 
           new_paths = []
-          @paths.each do |path|
+          @paths.count.times do
+            path = @paths.shift
             last_state = State.new(path.states.keys.last)
             return path if last_state.final?
             last_state.allowed_actions.each do |action|
-              new_paths << path.deep_clone
+              test_state = last_state.deep_clone
+              test_state.take_action action
+              next unless StateSpaceGraph.uniq? test_state
+
+              @paths << path.deep_clone
               begin
-                new_paths.last << action
+                @paths.last << action
               rescue ArgumentError
-                new_paths.pop
+                @paths.pop
               end
             end
           end
-          @paths = new_paths
+
           #binding.pry
-          optimize_paths
+          #optimize_paths
           iterate_paths
         end
 
@@ -257,18 +262,21 @@ module Botclean
           last_states = @paths.map {|path| State.new path.states.keys.last}
           paths_to_delete = []
           paths_to_keep = []
+          #binding.pry
           last_states.each.with_index do |test_state,state_index|
             @paths.each.with_index do |path,path_index|
               if state_index != path_index and path.include? test_state and path.steps.count <= @paths[state_index].steps.count
-                #binding.pry
+                #binding.pry if @paths[state_index].states.values.take(8) == ["RIGHT","CLEAN","DOWN","CLEAN","RIGHT","RIGHT","UP","RIGHT"]
+                #binding.pry if @paths[state_index].states.values.take(8) == ["RIGHT","CLEAN","DOWN","CLEAN","RIGHT","RIGHT","RIGHT","UP"]
                 paths_to_delete << state_index
-                paths_to_keep << path_index
+                paths_to_keep << path_index unless paths_to_keep.include? state_index
               end
             end
           end
           #binding.pry
           paths_to_delete.uniq!
-          @paths = @paths.reject.with_index {|path,i| paths_to_delete.include? i }
+          paths_to_keep.uniq!
+          @paths = @paths.reject.with_index {|path,i| paths_to_delete.include? i and !paths_to_keep.include? i}
           #paths_to_delete.each do |i|
           #  @paths.delete_at i
           #end
