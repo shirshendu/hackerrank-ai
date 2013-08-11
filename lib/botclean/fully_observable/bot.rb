@@ -258,30 +258,6 @@ module Botclean
           iterate_paths
         end
 
-        def optimize_paths
-          last_states = @paths.map {|path| State.new path.states.keys.last}
-          paths_to_delete = []
-          paths_to_keep = []
-          #binding.pry
-          last_states.each.with_index do |test_state,state_index|
-            @paths.each.with_index do |path,path_index|
-              if state_index != path_index and path.include? test_state and path.steps.count <= @paths[state_index].steps.count
-                #binding.pry if @paths[state_index].states.values.take(8) == ["RIGHT","CLEAN","DOWN","CLEAN","RIGHT","RIGHT","UP","RIGHT"]
-                #binding.pry if @paths[state_index].states.values.take(8) == ["RIGHT","CLEAN","DOWN","CLEAN","RIGHT","RIGHT","RIGHT","UP"]
-                paths_to_delete << state_index
-                paths_to_keep << path_index unless paths_to_keep.include? state_index
-              end
-            end
-          end
-          #binding.pry
-          paths_to_delete.uniq!
-          paths_to_keep.uniq!
-          @paths = @paths.reject.with_index {|path,i| paths_to_delete.include? i and !paths_to_keep.include? i}
-          #paths_to_delete.each do |i|
-          #  @paths.delete_at i
-          #end
-        end
-
         def uniq? state
           @paths.each do |path|
             return false if path.include? state
