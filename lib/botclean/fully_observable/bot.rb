@@ -226,6 +226,7 @@ module Botclean
         def find_best_path state
           @paths = []
           @initial_state = state
+          @states = {}
           iterate_paths
         end
 
@@ -244,6 +245,9 @@ module Botclean
               test_state.take_action action
               next unless StateSpaceGraph.uniq? test_state
 
+              # Since this state is unique,
+              @states[test_state.data] = nil
+
               @paths << path.deep_clone
               begin
                 @paths.last << action
@@ -259,10 +263,7 @@ module Botclean
         end
 
         def uniq? state
-          @paths.each do |path|
-            return false if path.include? state
-          end
-          return true
+          !@states.has_key? state.data
         end
       end
     end
