@@ -23,7 +23,7 @@ module Botclean
             @board[@robot_pos.r][@robot_pos.c - 1] = @board[@robot_pos.r][@robot_pos.c - 1] == "d" ? "d" : "b"
             # The updated position
             @robot_pos.c -= 1
-          elsif action == "RIGHT" and @robot_pos.c + 1 <= 4
+          elsif action == "RIGHT" and @robot_pos.c + 1 <= @siz[0] - 1
             # The square its entering
             @board[@robot_pos.r][@robot_pos.c + 1] = @board[@robot_pos.r][@robot_pos.c + 1] == "d" ? "d" : "b"
             # The updated position
@@ -33,7 +33,7 @@ module Botclean
             @board[@robot_pos.r - 1][@robot_pos.c] = @board[@robot_pos.r - 1][@robot_pos.c] == "d" ? "d" : "b"
             # The updated position
             @robot_pos.r -= 1
-          elsif action == "DOWN" and @robot_pos.r + 1 <= 4
+          elsif action == "DOWN" and @robot_pos.r + 1 <= @siz[1] - 1
             # The square its entering
             @board[@robot_pos.r + 1][@robot_pos.c] = @board[@robot_pos.r + 1][@robot_pos.c] == "d" ? "d" : "b"
             # The updated position
@@ -48,10 +48,11 @@ module Botclean
         def data=(input)
           line = input.lines[0].strip
           @robot_pos = Environment::Position.new(line.split.map {|i| i.to_i})
-          @board = Array.new(5)
+          @siz = input.lines[1].strip.split.map{|i| i.to_i}
+          @board = Array.new(@siz[1])
 
-          (1...6).each do |i|
-            @board[i - 1] = input.lines[i].strip
+          (2...(@siz[1]+2)).each do |i|
+            @board[i - 2] = input.lines[i].strip
           end
         end
 
