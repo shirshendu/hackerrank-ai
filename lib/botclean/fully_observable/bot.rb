@@ -1,15 +1,35 @@
 #!/usr/bin/ruby
 
 # Head ends here
-def next_move posx, posy, board
-
-  puts "Best path:"
-  best_path = Botclean::FullyObservable::Bot.find_path posx, posy, 5, 5, board
-  puts best_path.steps
-  puts best_path.steps.count
-  puts "================="
-  Botclean::FullyObservable::Bot.next_move
+def next_move posx, posy, sizx, sizy, board
+  if File.exists? "solution"
+    steps = read_solution
+    action = steps.shift
+    persist_solution steps
+    return action
+  else
+    best_path = Botclean::FullyObservable::Bot.find_path posx, posy, sizx, sizy, board
+    steps = best_path.steps
+    action = steps.shift
+    persist_solution steps
+    return action
+  end
 end
+
+def persist_solution step_array
+  #binding.pry
+  f=File.new "solution","w"
+  f.write Marshal.dump(step_array)
+  f.close
+end
+
+def read_solution
+  f=File.new "solution"
+  steps = Marshal.restore f.read
+  f.close
+  steps
+end
+
 class Object
   def deep_clone
     return @deep_cloning_obj if @deep_cloning
@@ -49,43 +69,10 @@ module Botclean
           @board = board
           @robot = Position.new([posx,posy])
 
-          initial_state_data = "#{posx} #{posy}\n#{board.join("\n")}".to_sym
+          initial_state_data = "#{posx} #{posy}\n#{sizx} #{sizy}\n#{board.join("\n")}".to_sym
           initial_state = State.new initial_state_data
 
           StateSpaceGraph.find_best_path initial_state
-        end
-
-        def next_move posx, posy, sizx, sizy, board
-          # Where am I?
-          @board = board
-          @robot = Position.new([posx,posy])
-
-          #Lets decide on a path
-
-          # Look at all this dirt under my feet!
-          if (board[posy][posx] == "d")
-            "CLEAN"
-          else
-            # Off we go, to dirtier pastures.
-            @robot.way_towards(closest("d"))
-          end
-        end
-
-        def closest(destination_type)
-          (1..8).each_with_index do |offset|
-            r_start = ((@robot.r - offset) >= 0) ? @robot.r - offset : 0
-            r_end = ((@robot.r + offset) <= 4) ? @robot.r + offset : 4
-            c_start = ((@robot.c - offset) >= 0) ? @robot.c - offset : 0
-            c_end = ((@robot.c + offset) <= 4) ? @robot.c + offset : 4
-            (r_start..r_end).each_with_index do |row|
-              (c_start..c_end).each_with_index do |col|
-                if @board[row][col] == destination_type and (@robot.c - col).abs + (@robot.r - row).abs == offset
-                  p = Position.new([col,row])
-                  return p
-                end
-              end
-            end
-          end
         end
       end
     end
@@ -94,11 +81,6 @@ module Botclean
       attr_accessor :data
       def initialize init_data
         @data = init_data.to_sym
-      end
-
-      def set_size x,y
-        @sizx = x
-        @sizy = y
       end
 
       def deep_clone
@@ -118,14 +100,15 @@ module Botclean
 
       def robot_pos= position
         @robot_pos = position
-        @data = "#{position.c} #{position.r}\n#{board.join("\n")}".to_sym
+        @data = "#{position.c} #{position.r}\n#{sizx} #{sizy}\n#{board.join("\n")}".to_sym
       end
       
       def board
         @board ||
           begin
-            lines = @data.to_s.lines
-            lines.delete_at 0
+            lines = @data.to_s.lines.to_a
+            lines.shift
+            lines.shift
             lines.map! {|l| l.strip}
             @board = lines
           end
@@ -133,7 +116,29 @@ module Botclean
 
       def board= new_board
         @board = new_board
-        @data = "#{position.c} #{position.r}\n#{new_board.join("\n")}".to_sym
+        @data = "#{position.c} #{position.r}\n#{sizx} #{sizy}\n#{new_board.join("\n")}".to_sym
+      end
+
+      def sizx
+        @sizx ||
+          begin
+            lines = @data.to_s.lines.to_a
+            lines.shift
+            siz = lines.shift.strip.split.map!{|i| i.to_i}
+            @sizy = siz[1]
+            @sizx = siz[0]
+          end
+      end
+      
+      def sizy
+        @sizy ||
+          begin
+            lines = @data.to_s.lines.to_a
+            lines.shift
+            siz = lines.shift.strip.split.map!{|i| i.to_i}
+            @sizx = siz[0]
+            @sizy = siz[1]
+          end
       end
 
       def final?
@@ -144,14 +149,9 @@ module Botclean
         actions = []
         actions << "CLEAN" if board[robot_pos.r][robot_pos.c] == "d"
         actions << "LEFT" if robot_pos.c > 0
-        actions << "RIGHT" if robot_pos.c < 4
+        actions << "RIGHT" if robot_pos.c < (sizx - 1)
         actions << "UP" if robot_pos.r > 0
-        actions << "DOWN" if robot_pos.r < 4
-        #actions.select { |action|
-        #  test_state = self.deep_clone
-        #  test_state.take_action action
-        #  StateSpaceGraph.uniq? test_state
-        #}
+        actions << "DOWN" if robot_pos.r < (sizy - 1)
         actions
       end
 
@@ -164,7 +164,6 @@ module Botclean
           update_data
           return
         end
-        #binding.pry
         # The square its leaving behind
         @board[robot_pos.r][robot_pos.c] = board[robot_pos.r][robot_pos.c] == "d" ? "d" : "-"
         if action == "LEFT"
@@ -192,7 +191,7 @@ module Botclean
       end
       
       def update_data
-        @data = "#{robot_pos.c} #{robot_pos.r}\n#{board.join("\n")}".to_sym
+        @data = "#{robot_pos.c} #{robot_pos.r}\n#{sizx} #{sizy}\n#{board.join("\n")}".to_sym
       end
     end
 
